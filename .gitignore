@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# 运行时数据
+profiles/*.sqlite3
+profiles/*.db
+/data/
+
+# Node / Tauri
+node_modules/
+dist/
+gui/src-tauri/target/
+
+# 系统
+.DS_Store
+
+# 引擎二进制缓存
+~/.cache/cloakbrowser/
