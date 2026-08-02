@@ -68,6 +68,9 @@ class CloakBrowserEngine(BrowserEngine):
         proxy_kwargs, proxy_extra_args = _resolve_proxy_config(proxy)
         args = _resolve_webrtc_args(args, proxy)
         args = _append_webrtc_exit_ip(args, None)  # 无 geoip,exit_ip=None
+        # 加固:配了代理时禁止 WebRTC 绕过代理(防止真实 IP 经 UDP/STUN 泄露)
+        if proxy:
+            args = (args or []) + ["--webrtc-ip-handling-policy=disable_non_proxied_udp"]
         chrome_args = build_args(
             stealth_args=True,
             extra_args=(args or []) + proxy_extra_args,
