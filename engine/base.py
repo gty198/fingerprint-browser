@@ -38,11 +38,13 @@ class ProxyConfig:
 class FingerprintConfig:
     """一份 profile 的指纹参数。None 表示交给引擎自洽生成/默认。"""
 
+    platform: str | None = None                   # macos / windows / linux(引擎能力内会联动 UA+screen)
     user_agent: str | None = None
     viewport: dict[str, int] | None = None          # {"width":.., "height":..}
     locale: str | None = None                       # BCP47, e.g. en-US / zh-CN
     timezone: str | None = None                     # IANA, e.g. Asia/Shanghai
     color_scheme: str | None = None                 # light / dark / no-preference
+    hardware_concurrency: int | None = None
     proxy: ProxyConfig | None = None
     humanize: bool = False
     extra_args: list[str] = field(default_factory=list)
@@ -73,6 +75,10 @@ class BrowserEngine(Protocol):
 
     def ensure_binary(self) -> str:
         """下载/校验引擎二进制,返回可执行路径。"""
+        ...
+
+    def capabilities(self) -> dict[str, bool]:
+        """当前安装的二进制实际支持哪些指纹维度(供 GUI 提示"免费版不支持 X")。"""
         ...
 
     def launch_persistent(

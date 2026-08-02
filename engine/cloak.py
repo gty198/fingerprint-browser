@@ -18,6 +18,20 @@ class CloakBrowserEngine(BrowserEngine):
     def ensure_binary(self) -> str:
         return cloakbrowser.ensure_binary()
 
+    def capabilities(self) -> dict[str, bool]:
+        """v145 免费二进制实测:platform/UA/并发数/时区/噪声种子可控;locale 与 macos 屏幕锁宿主机。"""
+        info = cloakbrowser.binary_info()
+        return {
+            "platform": True,
+            "user_agent": True,
+            "hardware_concurrency": True,
+            "timezone": True,
+            "color_scheme": True,
+            "fingerprint_seed": True,   # canvas/audio/字体噪声
+            "locale": False,            # --fingerprint-locale 未在免费二进制生效
+            "screen": info.get("platform") != "darwin-arm64",  # 非 mac 平台 screen 随 platform 变
+        }
+
     def launch_persistent(
         self,
         user_data_dir: Path,
@@ -26,6 +40,13 @@ class CloakBrowserEngine(BrowserEngine):
     ) -> EngineHandle:
         user_data_dir.mkdir(parents=True, exist_ok=True)
         proxy_str = fp.proxy.server if fp.proxy else None
+
+        # platform / 并发数没有独立参数,通过 --fingerprint-* 二进制参数注入
+        extra = list(fp.extra_args)
+        if fp.platform:
+            extra.append(f"--fingerprint-platform={fp.platform}")
+        if fp.hardware_concurrency:
+            extra.append(f"--fingerprint-hardware-concurrency={fp.hardware_concurrency}")
 
         context = cloakbrowser.launch_persistent_context(
             user_data_dir=str(user_data_dir),
@@ -37,7 +58,7 @@ class CloakBrowserEngine(BrowserEngine):
             timezone=fp.timezone,
             color_scheme=fp.color_scheme,
             humanize=fp.humanize,
-            args=fp.extra_args,
+            args=extra,
         )
         # persistent context 模式下 launch_persistent_context 返回的是 context 对象
         return EngineHandle(browser=context, context=context, engine_name=self.name)
