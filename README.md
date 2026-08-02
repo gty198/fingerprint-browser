@@ -69,9 +69,13 @@ Tauri 启动时自动拉起 FastAPI 后端(8000 端口),关窗自动结束。
 
 ## 引擎能力说明
 
-CloakBrowser 免费二进制 (v145) 实测支持:平台/UA、硬件并发数、时区、配色、canvas/audio/字体噪声。
-**不支持**:语言(锁宿主机系统语言)、Mac 屏幕尺寸。付费 Pro 解锁更多。GUI 会按 `/api/engine`
+CloakBrowser 免费二进制 (v145) 实测支持:平台/UA、硬件并发数、时区、语言(locale)、配色、
+canvas/audio/字体噪声。**不支持**:Mac 屏幕尺寸。付费 Pro 解锁更多。GUI 会按 `/api/engine`
 返回的 capabilities 提示哪些维度当前不生效。
+
+> **语言一致性说明**:`engine/cloak.py` 自研 Playwright 封装,locale 走 Playwright CDP 注入
+> (CloakBrowser 原封装的 `--lang` 二进制参数在免费版被忽略)。实测 `navigator.language`、
+> `navigator.languages`、`Intl`、真实 HTTP `Accept-Language` 头全部一致,`webdriver` 仍为 false。
 
 ## 已知限制
 - 免费二进制限 **1 并发会话**(多开多个窗口需要 Pro 授权)
