@@ -4,8 +4,7 @@ __pycache__/
 .venv/
 
 # 运行时数据
-profiles/*.sqlite3
-profiles/*.db
+profiles/
 /data/
 
 # Node / Tauri
