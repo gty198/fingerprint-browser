@@ -98,6 +98,10 @@ class CookiesRequest(BaseModel):
     cookies: list[dict[str, Any]]
 
 
+class EvalRequest(BaseModel):
+    expression: str
+
+
 # ---------- 引擎 ----------
 
 @app.get("/api/health")
@@ -228,6 +232,19 @@ def export_cookies(pid: str) -> dict:
     except NotRunningError:
         raise HTTPException(409, "profile not running, start it first") from None
     return {"cookies": cookies}
+
+
+@app.post("/api/profiles/{pid}/eval")
+def eval_js(pid: str, body: EvalRequest) -> dict:
+    """在运行中的浏览器页面执行 JS(本地调试/验收用)。"""
+    try:
+        def _run(ctx):
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            return page.evaluate(body.expression)
+        result = manager.call(pid, _run)
+    except NotRunningError:
+        raise HTTPException(409, "profile not running, start it first") from None
+    return {"result": result}
 
 
 @app.post("/api/profiles/{pid}/cookies")
