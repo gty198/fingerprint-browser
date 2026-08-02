@@ -1,22 +1,33 @@
-"""控制层 FastAPI 应用。
+"""控制层 FastAPI 应用 + 启动入口。
 
 给 GUI / CLI / 脚本提供统一 HTTP 接口:
 profile CRUD、指纹再生成、启动/关闭浏览器、代理 geoip 匹配、Cookie 导入导出。
+
+两种启动方式等价:
+- `python server/app.py`(GUI 用,自动把仓库根加入 sys.path)
+- `uvicorn server.app:app --host 127.0.0.1 --port 8000`
 """
 from __future__ import annotations
 
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-from engine.cloak import CloakBrowserEngine
-from server.geoip import resolve_geoip
-from server.manager import BrowserManager, NotRunningError
-from server.models import ProfileStore
+from contextlib import asynccontextmanager  # noqa: E402
+
+from fastapi import FastAPI, HTTPException  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
+
+from engine.cloak import CloakBrowserEngine  # noqa: E402
+from server.geoip import resolve_geoip  # noqa: E402
+from server.manager import BrowserManager, NotRunningError  # noqa: E402
+from server.models import ProfileStore  # noqa: E402
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "profiles"
 
@@ -24,7 +35,15 @@ engine = CloakBrowserEngine()
 store = ProfileStore(db_path=DATA_DIR / "profiles.sqlite3", profiles_root=DATA_DIR)
 manager = BrowserManager(engine=engine, store=store)
 
-app = FastAPI(title="Fingerprint Browser", version="0.1.0")
+@asynccontextmanager
+async def _lifespan(_: FastAPI):
+    try:
+        yield
+    finally:
+        manager.shutdown()
+
+
+app = FastAPI(title="Fingerprint Browser", version="0.1.0", lifespan=_lifespan)
 
 # Tauri 开发环境 origin 是 http://localhost:5173,生产是 tauri://localhost;开发期放开
 app.add_middleware(
@@ -233,6 +252,6 @@ def import_cookies(pid: str, body: CookiesRequest) -> dict:
     return {"imported": len(normalized)}
 
 
-@app.on_event("shutdown")
-def _shutdown() -> None:
-    manager.shutdown()
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("server.app:app", host="127.0.0.1", port=8000, log_level="warning")
