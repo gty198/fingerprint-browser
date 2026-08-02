@@ -54,6 +54,23 @@ cd gui && npx tauri dev
 ```
 Tauri 启动时自动拉起 FastAPI 后端(8000 端口),关窗自动结束。
 
+## 打包为正式 Mac 应用(日常使用)
+```bash
+cd gui && npx tauri build
+```
+产物:
+- `gui/src-tauri/target/release/bundle/macos/FingerprintBrowser.app` — 应用
+- `gui/src-tauri/target/release/bundle/dmg/FingerprintBrowser_0.1.0_aarch64.dmg` — 安装包
+
+打包后:
+```bash
+# 拷到应用程序文件夹,之后从启动台 / Spotlight 双击即可
+cp -R gui/src-tauri/target/release/bundle/macos/FingerprintBrowser.app /Applications/
+open /Applications/FingerprintBrowser.app   # 或双击
+```
+应用启动时自动拉起后端、关窗自动结束;若 :8000 已有健康后端则复用不重复拉起。
+> 说明:后端代码仍在项目目录,`.app` 通过源码树路径解析(需项目目录保持);跨机分发需把 server/ 内嵌进 .app。
+
 ### 运行(无 GUI,仅后端 + 手动)
 ```bash
 .venv/bin/python server/app.py
