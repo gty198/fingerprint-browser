@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -92,7 +93,9 @@ class ProfileStore:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.profiles_root = Path(profiles_root) if profiles_root else self.db_path.parent
-        self._conn = sqlite3.connect(self.db_path)
+        # FastAPI 同步端点在线程池执行,跨线程访问需要 check_same_thread=False + 锁
+        self._lock = threading.Lock()
+        self._conn = sqlite3.connect(self.db_path, timeout=10, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._migrate()
 
@@ -140,12 +143,14 @@ class ProfileStore:
         return p
 
     def get(self, pid: str) -> Profile | None:
-        row = self._conn.execute("SELECT * FROM profiles WHERE id = ?", (pid,)).fetchone()
-        return Profile.from_row(row) if row else None
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM profiles WHERE id = ?", (pid,)).fetchone()
+            return Profile.from_row(row) if row else None
 
     def list(self) -> list[Profile]:
-        rows = self._conn.execute("SELECT * FROM profiles ORDER BY updated_at DESC").fetchall()
-        return [Profile.from_row(r) for r in rows]
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM profiles ORDER BY updated_at DESC").fetchall()
+            return [Profile.from_row(r) for r in rows]
 
     def update(self, pid: str, **fields: Any) -> Profile | None:
         p = self.get(pid)
@@ -159,36 +164,38 @@ class ProfileStore:
         return p
 
     def delete(self, pid: str) -> bool:
-        cur = self._conn.execute("DELETE FROM profiles WHERE id = ?", (pid,))
-        self._conn.commit()
-        return cur.rowcount > 0
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM profiles WHERE id = ?", (pid,))
+            self._conn.commit()
+            return cur.rowcount > 0
 
     def data_dir(self, p: Profile) -> Path:
         """该 profile 的浏览器 user-data-dir(独立隔离目录)。"""
         return self.profiles_root / p.user_data_dir
 
     def _upsert(self, p: Profile) -> None:
-        self._conn.execute(
-            """
-            INSERT INTO profiles (
-                id, name, user_data_dir, user_agent, platform, timezone, locale,
-                viewport_width, viewport_height, color_scheme, hardware_concurrency,
-                humanize, proxy_server, notes, created_at, updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            ON CONFLICT(id) DO UPDATE SET
-                name=excluded.name, user_data_dir=excluded.user_data_dir,
-                user_agent=excluded.user_agent, platform=excluded.platform,
-                timezone=excluded.timezone, locale=excluded.locale,
-                viewport_width=excluded.viewport_width, viewport_height=excluded.viewport_height,
-                color_scheme=excluded.color_scheme, hardware_concurrency=excluded.hardware_concurrency,
-                humanize=excluded.humanize, proxy_server=excluded.proxy_server,
-                notes=excluded.notes, updated_at=excluded.updated_at
-            """,
-            (
-                p.id, p.name, p.user_data_dir, p.user_agent, p.platform, p.timezone,
-                p.locale, p.viewport_width, p.viewport_height, p.color_scheme,
-                p.hardware_concurrency, int(p.humanize), p.proxy_server, p.notes,
-                p.created_at, p.updated_at,
-            ),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO profiles (
+                    id, name, user_data_dir, user_agent, platform, timezone, locale,
+                    viewport_width, viewport_height, color_scheme, hardware_concurrency,
+                    humanize, proxy_server, notes, created_at, updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name=excluded.name, user_data_dir=excluded.user_data_dir,
+                    user_agent=excluded.user_agent, platform=excluded.platform,
+                    timezone=excluded.timezone, locale=excluded.locale,
+                    viewport_width=excluded.viewport_width, viewport_height=excluded.viewport_height,
+                    color_scheme=excluded.color_scheme, hardware_concurrency=excluded.hardware_concurrency,
+                    humanize=excluded.humanize, proxy_server=excluded.proxy_server,
+                    notes=excluded.notes, updated_at=excluded.updated_at
+                """,
+                (
+                    p.id, p.name, p.user_data_dir, p.user_agent, p.platform, p.timezone,
+                    p.locale, p.viewport_width, p.viewport_height, p.color_scheme,
+                    p.hardware_concurrency, int(p.humanize), p.proxy_server, p.notes,
+                    p.created_at, p.updated_at,
+                ),
+            )
+            self._conn.commit()

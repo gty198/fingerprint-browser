@@ -72,8 +72,11 @@ def _pick_unique(rng: random.Random, values: list, used: set) -> object:
     return rng.choice(pool if pool else values)
 
 
-def ensure_fingerprint(p: Profile, store: ProfileStore) -> Profile:
-    """补齐 profile 缺失的指纹字段并持久化,返回完整 Profile。"""
+def ensure_fingerprint(p: Profile, store: ProfileStore, used_extra: set | None = None) -> Profile:
+    """补齐 profile 缺失的指纹字段并持久化,返回完整 Profile。
+
+    used_extra:额外要避开的组合(如「指纹再生成」时避开自己旧的组合)。
+    """
     updates: dict[str, object] = {}
     rng = _rng(p)
 
@@ -85,6 +88,17 @@ def ensure_fingerprint(p: Profile, store: ProfileStore) -> Profile:
     used_viewport = {(x.viewport_width, x.viewport_height) for x in others if x.viewport_width}
     used_cores = {x.hardware_concurrency for x in others if x.hardware_concurrency}
     used_ua = {x.user_agent for x in others if x.user_agent}
+
+    for item in used_extra or ():
+        # item 可能是 (platform, tz, locale, w, h, cores) 或单值,统一并入
+        if isinstance(item, tuple) and len(item) == 6:
+            used_platform.add(item[0])
+            used_tz.add(item[1])
+            used_locale.add(item[2])
+            used_viewport.add((item[3], item[4]))
+            used_cores.add(item[5])
+        elif item:
+            used_platform.add(item)
 
     # 平台
     if not p.platform:
