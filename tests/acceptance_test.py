@@ -95,6 +95,26 @@ def main() -> int:
     # 我们给 A 生成的时区应等于浏览器实际报告的时区(自洽)
     check("profile 时区与浏览器实际时区一致", tz == a.timezone, f"{tz} == {a.timezone}")
 
+    print("\n== 4. 语言一致性(修复项) ==")
+    # profile 设 locale=en-AU,浏览器必须报 en-AU 而非宿主机 zh-CN
+    lang_store = ProfileStore(db_path=tmp / "lang.sqlite3", profiles_root=tmp)
+    lang_p = ensure_fingerprint(lang_store.create("语言测试"), lang_store)
+    lang_p = lang_store.update(lang_p.id, locale="en-AU", timezone="Australia/Sydney")
+    _, hl = launch_profile(lang_p, lang_store, engine, headless=True)
+    pl = hl.context.pages[0] if hl.context.pages else hl.context.new_page()
+    pl.goto("about:blank")
+    lang_sig = json.loads(pl.evaluate(
+        "(async () => { const r = await fetch('https://httpbin.org/headers').then(x=>x.json()).catch(()=>null); "
+        "return JSON.stringify({lang:navigator.language, langs:JSON.stringify(navigator.languages), "
+        "intl:Intl.DateTimeFormat().resolvedOptions().locale, "
+        "accept: r ? r.headers['Accept-Language'] : 'fail', wd:navigator.webdriver}); })()"
+    ))
+    hl.close()
+    check("navigator.language 为 en-AU", lang_sig["lang"] == "en-AU", f"lang={lang_sig['lang']}")
+    check("Accept-Language 含 en", "en" in lang_sig["accept"], f"accept={lang_sig['accept']}")
+    check("Intl locale 为 en-AU", lang_sig["intl"] == "en-AU", f"intl={lang_sig['intl']}")
+    check("语言修复后 webdriver 仍为 false", lang_sig["wd"] is False)
+
     shutil.rmtree(tmp, ignore_errors=True)
 
     print(f"\n结果: ✅ {PASS} 通过, ❌ {FAIL} 失败")
