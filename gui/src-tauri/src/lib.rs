@@ -38,19 +38,39 @@ fn resolve_python(project_root: &std::path::Path) -> Option<std::path::PathBuf> 
     None
 }
 
-/// 定位控制层代码目录:
-/// 1) 源码树(开发 + 本机打包,venv 在仓库根)
-/// 2) 应用资源目录内嵌的 server/(未来分发自包含时的兜底)
+/// 定位控制层代码目录,依次尝试:
+/// 1) 编译期源码树路径(开发 + 本机打包,venv 在仓库根)
+/// 2) 当前工作目录(可能直接从源码树内启动)
+/// 3) 扫描 /Volumes 下的 claude/fingerprint-browser(外置盘挂载名变化后兜底)
+/// 4) 应用资源目录内嵌的 server/(未来分发自包含时的兜底)
 fn find_server_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
-    // 源码树:tauri.conf.json 在 gui/ 下,仓库根是上一级
-    let source_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("..");
-    let source_server = source_root.join("server");
-    if source_server.join("app.py").exists() {
-        return Some(source_server);
+    // 1) 编译期源码树:tauri.conf.json 在 gui/ 下,仓库根是上一级
+    let mut candidates: Vec<std::path::PathBuf> = vec![
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join(".."),
+    ];
+    // 2) 当前工作目录
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd);
     }
-    // 打包资源内嵌 server/
+    for root in &candidates {
+        let server = root.join("server");
+        if server.join("app.py").exists() {
+            return Some(server);
+        }
+    }
+    // 3) 外置盘重挂兜底:挂载名可能被加 " 1" 等后缀,逐个扫描 /Volumes
+    if let Ok(volumes) = std::fs::read_dir("/Volumes") {
+        for entry in volumes.flatten() {
+            let root = entry.path().join("claude").join("fingerprint-browser");
+            let server = root.join("server");
+            if server.join("app.py").exists() {
+                return Some(server);
+            }
+        }
+    }
+    // 4) 打包资源内嵌 server/
     if let Ok(res_dir) = app.path().resource_dir() {
         let bundled = res_dir.join("server");
         if bundled.join("app.py").exists() {
