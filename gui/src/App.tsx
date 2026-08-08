@@ -6,11 +6,6 @@ import { ProfileModal } from './components/ProfileModal'
 const PLATFORM_LABEL: Record<string, string> = {
   macos: 'macOS', windows: 'Windows', linux: 'Linux',
 }
-const CAP_LABELS: [keyof Capabilities, string][] = [
-  ['platform', '平台/UA'], ['hardware_concurrency', '硬件并发'], ['timezone', '时区'],
-  ['locale', '语言'], ['screen', '屏幕'], ['color_scheme', '配色'], ['fingerprint_seed', '噪声种子'],
-]
-
 interface Toast { id: number; text: string; kind: 'ok' | 'err' }
 
 export default function App() {
@@ -94,8 +89,6 @@ export default function App() {
     input.click()
   }
 
-  const unsupported = caps ? Object.entries(caps).filter(([, v]) => !v).map(([k]) => k) : []
-
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       {/* 顶部 */}
@@ -114,15 +107,6 @@ export default function App() {
           + 新建 Profile
         </button>
       </header>
-
-      {/* 引擎能力提示 */}
-      {unsupported.length > 0 && (
-        <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-          ⚠️ 当前引擎免费版不支持:{' '}
-          {unsupported.map((k) => CAP_LABELS.find(([x]) => x === k)?.[1] ?? k).join('、')}。
-          这些维度将沿用宿主机真实值(语言固定为系统语言,Mac 屏幕固定)。
-        </div>
-      )}
 
       {/* Profile 列表 */}
       {profiles.length === 0 ? (
